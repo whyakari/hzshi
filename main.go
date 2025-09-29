@@ -14,6 +14,8 @@ import (
     "github.com/manifoldco/promptui"
 )
 
+var authorMessage = "Autor: akarizao"
+
 var translations = map[string]map[string]string{
     "pt": {
         "select_min":         "Selecione o valor mínimo (min_refresh_rate)",
@@ -83,6 +85,10 @@ func getSetting(setting string) (string, error) {
     return result, nil
 }
 
+func clearScreen() {
+    fmt.Print("\033[H\033[2J")
+}
+
 func waitForEnter() {
     bufio.NewReaderSize(nil, 1).ReadBytes('\n')
 }
@@ -90,6 +96,8 @@ func waitForEnter() {
 func main() {
 MainLoop:
     for {
+        clearScreen()
+        fmt.Println(authorMessage)
         languages := []string{"Português", "English"}
         codeMap := map[string]string{"Português": "pt", "English": "en"}
 
@@ -102,9 +110,12 @@ MainLoop:
             fmt.Printf("Prompt failed: %v\n", err)
             return
         }
+
         lang := codeMap[langChosen]
         t := translations[lang]
 
+        clearScreen()
+        fmt.Println(authorMessage)
         setRatePrompt := promptui.Select{
             Label: t["set_rates_question"],
             Items: []string{t["yes"], t["no"]},
@@ -121,6 +132,8 @@ MainLoop:
 
     RefreshLoop:
         for {
+            clearScreen()
+            fmt.Println(authorMessage)
             minOptions := intToStringSlice(refreshRates)
             minPrompt := promptui.Select{
                 Label: t["select_min"],
@@ -134,10 +147,11 @@ MainLoop:
             minRate := 0
             fmt.Sscanf(minVal, "%d Hz", &minRate)
 
-            peakOptions := intToStringSlice(refreshRates)
+            clearScreen()
+            fmt.Println(authorMessage)
             peakPrompt := promptui.Select{
                 Label: t["select_peak"],
-                Items: peakOptions,
+                Items: minOptions,
             }
             _, peakVal, err := peakPrompt.Run()
             if err != nil {
@@ -153,6 +167,7 @@ MainLoop:
             fmt.Printf(t["configured"]+"\n", minRate, peakRate)
 
             for {
+                fmt.Println(authorMessage)
                 actionOptions := []string{t["back"], t["reset"], t["view_rates"], t["exit"]}
                 actionPrompt := promptui.Select{
                     Label: t["action_select"],
