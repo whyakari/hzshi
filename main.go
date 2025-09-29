@@ -1,5 +1,9 @@
 package main
 
+/*
+* by akarizao - 2025
+*/
+
 import (
     "bufio"
     "bytes"
