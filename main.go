@@ -1,80 +1,187 @@
 package main
 
 import (
+    "bufio"
+    "bytes"
     "fmt"
     "os/exec"
+    "strings"
 
     "github.com/manifoldco/promptui"
 )
 
 var translations = map[string]map[string]string{
     "pt": {
-        "select_refresh": "Selecione a taxa de atualização",
-        "configured":     "Configurado para %s (min: %d, peak: %d)",
-        "menu_60":        "60 Hz",
-        "menu_90":        "90 Hz",
-        "menu_120":       "120 Hz",
-	"exit": "Sair",
-        "lang_select":    "Selecione o idioma",
-        "lang_pt":        "Português",
-        "lang_en":        "Inglês",
+        "select_min":         "Selecione o valor mínimo (min_refresh_rate)",
+        "select_peak":        "Selecione o valor máximo (peak_refresh_rate)",
+        "configured":         "Configurado (min: %d, peak: %d)",
+        "exit":               "Sair",
+        "back":               "Voltar ao menu inicial",
+        "reset":              "Redefinir taxas",
+        "view_rates":         "Visualizar taxas atuais",
+        "lang_select":        "Selecione o idioma",
+        "lang_pt":            "Português",
+        "lang_en":            "Inglês",
+        "exit_message":       "Saindo...",
+        "back_message":       "Voltando ao menu inicial...",
+        "reset_message":      "Redefina as taxas de atualização.",
+        "action_select":      "O que deseja fazer?",
+        "current_rates":      "Taxas atuais: min_refresh_rate = %s, peak_refresh_rate = %s",
+        "view_press_enter":   "Pressione Enter para voltar...",
+        "error_reading_rates": "Erro ao ler taxas atuais",
+        "set_rates_question": "Definir taxa de atualização?",
+        "yes":                "Sim",
+        "no":                 "Não",
     },
     "en": {
-        "select_refresh": "Select refresh rate",
-        "configured":     "Configured to %s (min: %d, peak: %d)",
-        "menu_60":        "60 Hz",
-        "menu_90":        "90 Hz",
-        "menu_120":       "120 Hz",
-	"exit": "Exit",
-        "lang_select":    "Select language",
-        "lang_pt":        "Portuguese",
-        "lang_en":        "English",
+        "select_min":         "Select minimum value (min_refresh_rate)",
+        "select_peak":        "Select maximum value (peak_refresh_rate)",
+        "configured":         "Configured (min: %d, peak: %d)",
+        "exit":               "Exit",
+        "back":               "Back to main menu",
+        "reset":              "Reset rates",
+        "view_rates":         "View current rates",
+        "lang_select":        "Select language",
+        "lang_pt":            "Portuguese",
+        "lang_en":            "English",
+        "exit_message":       "Exiting...",
+        "back_message":       "Returning to main menu...",
+        "reset_message":      "Please reset the refresh rates.",
+        "action_select":      "What would you like to do?",
+        "current_rates":      "Current rates: min_refresh_rate = %s, peak_refresh_rate = %s",
+        "view_press_enter":   "Press Enter to go back...",
+        "error_reading_rates": "Error reading current rates",
+        "set_rates_question": "Set refresh rate?",
+        "yes":                "Yes",
+        "no":                 "No",
     },
 }
 
+var refreshRates = []int{60, 90, 120}
+
+func intToStringSlice(items []int) []string {
+    s := make([]string, len(items))
+    for i, v := range items {
+        s[i] = fmt.Sprintf("%d Hz", v)
+    }
+    return s
+}
+
+func getSetting(setting string) (string, error) {
+    cmd := exec.Command("settings", "get", "system", setting)
+    var out bytes.Buffer
+    cmd.Stdout = &out
+    err := cmd.Run()
+    if err != nil {
+        return "", err
+    }
+    result := strings.TrimSpace(out.String())
+    return result, nil
+}
+
+func waitForEnter() {
+    bufio.NewReaderSize(nil, 1).ReadBytes('\n')
+}
+
 func main() {
-    languages := []string{"Português", "English"}
-    codeMap := map[string]string{"Português": "pt", "English": "en"}
+MainLoop:
+    for {
+        languages := []string{"Português", "English"}
+        codeMap := map[string]string{"Português": "pt", "English": "en"}
 
-    langPrompt := promptui.Select{
-        Label: translations["en"]["lang_select"],
-        Items: languages,
-    }
+        langPrompt := promptui.Select{
+            Label: translations["en"]["lang_select"],
+            Items: languages,
+        }
+        _, langChosen, err := langPrompt.Run()
+        if err != nil {
+            fmt.Printf("Prompt failed: %v\n", err)
+            return
+        }
+        lang := codeMap[langChosen]
+        t := translations[lang]
 
-    _, langChosen, err := langPrompt.Run()
-    if err != nil {
-        fmt.Printf("Prompt failed: %v\n", err)
-        return
-    }
-    lang := codeMap[langChosen]
-    t := translations[lang]
+        setRatePrompt := promptui.Select{
+            Label: t["set_rates_question"],
+            Items: []string{t["yes"], t["no"]},
+        }
+        _, setRateChoice, err := setRatePrompt.Run()
+        if err != nil {
+            fmt.Printf("Prompt failed: %v\n", err)
+            return
+        }
+        if setRateChoice == t["no"] {
+            fmt.Println(t["exit_message"])
+            return
+        }
 
-    options := []string{t["menu_60"], t["menu_90"], t["menu_120"], t["exit"]}
-    hzPrompt := promptui.Select{
-        Label: t["select_refresh"],
-        Items: options,
-    }
+    RefreshLoop:
+        for {
+            minOptions := intToStringSlice(refreshRates)
+            minPrompt := promptui.Select{
+                Label: t["select_min"],
+                Items: minOptions,
+            }
+            _, minVal, err := minPrompt.Run()
+            if err != nil {
+                fmt.Printf("Prompt failed: %v\n", err)
+                return
+            }
+            minRate := 0
+            fmt.Sscanf(minVal, "%d Hz", &minRate)
 
-    idx, result, err := hzPrompt.Run()
-    if err != nil {
-        fmt.Printf("Prompt failed: %v\n", err)
-        return
-    }
+            peakOptions := intToStringSlice(refreshRates)
+            peakPrompt := promptui.Select{
+                Label: t["select_peak"],
+                Items: peakOptions,
+            }
+            _, peakVal, err := peakPrompt.Run()
+            if err != nil {
+                fmt.Printf("Prompt failed: %v\n", err)
+                return
+            }
+            peakRate := 0
+            fmt.Sscanf(peakVal, "%d Hz", &peakRate)
 
-    switch idx {
-    case 0:
-        exec.Command("settings", "put", "system", "min_refresh_rate", "60").Run()
-        exec.Command("settings", "put", "system", "peak_refresh_rate", "90").Run()
-        fmt.Printf(t["configured"]+"\n", result, 60, 90)
-    case 1:
-        exec.Command("settings", "put", "system", "min_refresh_rate", "90").Run()
-        exec.Command("settings", "put", "system", "peak_refresh_rate", "90").Run()
-        fmt.Printf(t["configured"]+"\n", result, 90, 90)
-    case 2:
-        exec.Command("settings", "put", "system", "min_refresh_rate", "90").Run()
-        exec.Command("settings", "put", "system", "peak_refresh_rate", "120").Run()
-        fmt.Printf(t["configured"]+"\n", result, 90, 120)
-    case 3:
-	fmt.Println(result)
+            exec.Command("settings", "put", "system", "min_refresh_rate", fmt.Sprintf("%d", minRate)).Run()
+            exec.Command("settings", "put", "system", "peak_refresh_rate", fmt.Sprintf("%d", peakRate)).Run()
+
+            fmt.Printf(t["configured"]+"\n", minRate, peakRate)
+
+            for {
+                actionOptions := []string{t["back"], t["reset"], t["view_rates"], t["exit"]}
+                actionPrompt := promptui.Select{
+                    Label: t["action_select"],
+                    Items: actionOptions,
+                }
+                _, action, err := actionPrompt.Run()
+                if err != nil {
+                    fmt.Printf("Prompt failed: %v\n", err)
+                    return
+                }
+
+                switch action {
+                case t["back"]:
+                    fmt.Println(t["back_message"])
+                    continue MainLoop
+                case t["reset"]:
+                    fmt.Println(t["reset_message"])
+                    continue RefreshLoop
+                case t["view_rates"]:
+                    minCurrent, errMin := getSetting("min_refresh_rate")
+                    peakCurrent, errPeak := getSetting("peak_refresh_rate")
+                    if errMin != nil || errPeak != nil {
+                        fmt.Println(t["error_reading_rates"])
+                    } else {
+                        fmt.Printf(t["current_rates"]+"\n", minCurrent, peakCurrent)
+                    }
+                    fmt.Println(t["view_press_enter"])
+                    fmt.Scanln()
+                case t["exit"]:
+                    fmt.Println(t["exit_message"])
+                    return
+                }
+            }
+        }
     }
 }
